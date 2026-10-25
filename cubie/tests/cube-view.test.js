@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {CubeView} from '../src/cube-view.js';
 import {Cube,FACES,TURN,coordinates,scramble} from '../src/cube-state.js';
 
@@ -32,9 +33,71 @@ function stickerState(view){
  assert.ok(!state.includes('?'));
  return state.join('');
 }
+test('sideways dragging keeps the cube upright and preserves viewing tilt, at pointer speed',async()=>{
+ const canvas=new EventTarget();canvas.style={};canvas.clientHeight=canvas.clientWidth=600;
+ canvas.getBoundingClientRect=()=>({left:0,top:0,width:600,height:600});
+ canvas.getRootNode=()=>canvas;canvas.setPointerCapture=canvas.releasePointerCapture=()=>{};
+ const view=scene(new Cube().asString());view.camera=new THREE.PerspectiveCamera(32,1,.1,100);view.camera.position.set(0,5.4,10.7);
+ view.renderer={domElement:canvas};view.controls=new OrbitControls(view.camera,canvas);view.controls.enableRotate=false;
+ view.enableFaceTurns(()=>assert.fail('looking must not turn a layer'),{canTurn:()=>false,onPick:()=>assert.fail('a drag must not select a piece')});
+ const event=(type,x,y)=>Object.assign(new Event(type),{isPrimary:true,pointerId:1,pointerType:'mouse',button:0,clientX:x,clientY:y});
+ const drag=(dx,dy)=>{canvas.dispatchEvent(event('pointerdown',300,300));canvas.dispatchEvent(event('pointermove',300+dx,300+dy));canvas.dispatchEvent(event('pointerup',300+dx,300+dy));};
+ const previous=globalThis.requestAnimationFrame,frames=[];globalThis.requestAnimationFrame=callback=>frames.push(callback);
+ try{
+  for(const beat of [{face:'F',look:[0,5.4,10.7]},{face:'B',look:[5,5,-8]},{face:'R',interrupt:true}]){
+   const tour=view.focusTeaching(beat,{duration:1000});frames.shift()(0);
+   if(beat.interrupt){frames.shift()(500);view.stopFocus();}
+   frames.shift()(1000);await tour;
+   for(const dx of [60,60,-60,-60]){
+    const height=view.camera.position.y,distance=view.camera.position.distanceTo(view.controls.target);
+    drag(dx,0);
+    assert.ok(Math.abs(view.camera.position.y-height)<.00001,'horizontal movement preserves elevation');
+    assert.ok(Math.abs(view.camera.position.distanceTo(view.controls.target)-distance)<.00001,'horizontal movement preserves distance');
+    const right=new THREE.Vector3(1,0,0).applyQuaternion(view.camera.quaternion);
+    assert.ok(Math.abs(right.y)<.00001,'camera has no roll');
+    const top=new THREE.Vector3(0,1,0).project(view.camera),bottom=new THREE.Vector3(0,-1,0).project(view.camera);
+    assert.ok(Math.abs(top.x-bottom.x)<.00001,'the cube’s vertical axis stays vertical on screen');
+    const stopped=view.camera.quaternion.clone();for(let i=0;i<30;i++)view.controls.update();
+    assert.ok(view.camera.quaternion.angleTo(stopped)<.00001,'no delayed rotation after releasing');
+   }
+  }
+  for(const face of ['U','D']){
+   view.lookAtFace(face);drag(30,60);drag(0,1200);drag(60,0);
+   assert.ok(Number.isFinite(view.camera.quaternion.w));assert.deepEqual(view.camera.up.toArray(),[0,1,0]);
+   assert.ok(Math.hypot(view.camera.position.x,view.camera.position.z)>.01,'vertical dragging stops short of flipping upside down');
+  }
+  const angles=[];
+  for(const moves of [[[10,0]],[[60,0]],[[10,0],[20,0],[30,0],[40,0],[50,0],[60,0]],[[0,60]]]){
+   view.lookAtFace('F',10);const before=view.camera.quaternion.clone();canvas.dispatchEvent(event('pointerdown',300,300));
+   for(const [x,y] of moves)canvas.dispatchEvent(event('pointermove',300+x,300+y));
+   const [x,y]=moves.at(-1);canvas.dispatchEvent(event('pointerup',300+x,300+y));angles.push(before.angleTo(view.camera.quaternion));
+   const center=new THREE.Vector3(0,0,1.5).project(view.camera);assert.ok(x?center.x>0:center.y<0,'the surface follows the finger right or down');
+  }
+  assert.ok(Math.abs(angles[1]/angles[0]-6)<.00001,'faster movement rotates proportionally faster');
+  assert.ok(Math.abs(angles[1]-angles[2])<.00001,'rotation is independent of pointer event frequency');
+ }finally{globalThis.requestAnimationFrame=previous;view.controls.dispose();}
+});
 test('actual Three.js stickers start in the model’s facelet positions',()=>{
  const cube=new Cube().move("R U F2 L' B D2");
  assert.equal(stickerState(scene(cube.asString())),cube.asString());
+});
+test('direct view dragging preserves taps, face swipes, background rotation, and cancellation',()=>{
+ const canvas=new EventTarget();canvas.getBoundingClientRect=()=>({left:0,top:0,width:600,height:600});canvas.setPointerCapture=()=>{};
+ const view=scene(new Cube().asString());view.camera=new THREE.PerspectiveCamera(32,1,.1,100);view.camera.position.set(0,0,10);
+ view.controls={target:new THREE.Vector3()};view.camera.lookAt(view.controls.target);view.camera.updateMatrixWorld();view.renderer={domElement:canvas};
+ const picks=[],turns=[];view.enableFaceTurns(move=>turns.push(move),{onPick:pick=>picks.push(pick)});
+ const corner=new THREE.Vector3(1,1,1.51).project(view.camera),x=(corner.x+1)*300,y=(1-corner.y)*300;
+ const event=(type,x,y)=>Object.assign(new Event(type),{isPrimary:true,pointerId:1,pointerType:'mouse',button:0,clientX:x,clientY:y});
+ canvas.dispatchEvent(event('pointerdown',x,y));canvas.dispatchEvent(event('pointerup',x,y));
+ assert.deepEqual(picks,[{face:'F',position:[1,1,1]}]);
+ const before=view.camera.quaternion.clone();
+ canvas.dispatchEvent(event('pointerdown',x,y));canvas.dispatchEvent(event('pointermove',x+60,y));canvas.dispatchEvent(event('pointerup',x+60,y));
+ assert.deepEqual(turns,["U'"]);assert.ok(view.camera.quaternion.equals(before),'a face swipe does not also orbit');
+ canvas.dispatchEvent(event('pointerdown',10,10));canvas.dispatchEvent(event('pointermove',70,10));canvas.dispatchEvent(event('pointerup',70,10));
+ assert.ok(view.camera.quaternion.angleTo(before)>.1);assert.equal(turns.length,1);assert.equal(picks.length,1);
+ const stopped=view.camera.quaternion.clone();
+ canvas.dispatchEvent(event('pointerdown',10,10));canvas.dispatchEvent(event('pointercancel',10,10));canvas.dispatchEvent(event('pointermove',100,100));canvas.dispatchEvent(event('pointerup',100,100));
+ assert.ok(view.camera.quaternion.equals(stopped));assert.equal(turns.length,1);assert.equal(picks.length,1);
 });
 test('all 18 animated Three.js layers end with exactly the model’s sticker positions',()=>{
  const start=new Cube().move("B2 R U' F L2 D R2");
@@ -141,18 +204,18 @@ test('practice framing brings the cube closer without changing its orientation o
  view.resetCamera(.8);
  assert.ok(view.camera.position.distanceTo(position.multiplyScalar(.8))<.001);
  assert.equal(stickerState(view),before);
- view.resetCamera();assert.deepEqual(view.camera.position.toArray(),[0,5.4,10.7]);
+ view.resetCamera();assert.ok(view.camera.position.distanceTo(new THREE.Vector3(0,5.4,10.7))<.00001);
  assert.equal(view.isFacing('F'),true);
 });
 
 test('teaching highlights entire multi-sticker pieces and nine-piece layers without repainting the cube',async()=>{
  const {learnDemo,LEARN_TOPICS}=await import('../src/learn.js');
  const view=scene(new Cube().asString());view.scene=new THREE.Scene();view.scene.add(view.root);
- for(const topic of LEARN_TOPICS)for(const step of topic.steps)for(const beat of learnDemo(step)){
+ for(const topic of LEARN_TOPICS)for(const step of topic.steps)for(const beat of learnDemo(step).flatMap(beat=>beat.scenes||[beat])){
   view.teach(beat);
   const bright=view.cubies.flatMap(c=>c.children.filter(s=>s.userData.color&&s.material===view.materials[s.userData.color]));
   if(beat.position)assert.equal(bright.length,beat.focus==='edge'?2:3);
-  else assert.equal(bright.length,{face:9,center:1,edge:24,corner:24,layer:21}[beat.focus]);
+  else assert.equal(bright.length,{cube:54,face:9,center:1,edge:24,corner:24,layer:21}[beat.focus]);
   assert.equal(stickerState(view),new Cube().asString());
   if(beat.arrow){
    assert.ok(view.teachingArrow);const normal=new THREE.Vector3(0,0,1).applyQuaternion(view.teachingArrow.quaternion),[axis,sign]=TURN[beat.face];
@@ -175,7 +238,7 @@ test('camera tours keep a safe orbit, show every face including down, and honor 
   }
   const controller=new AbortController(),tour=view.focusTeaching({face:'F'},{signal:controller.signal});
   frames.shift()(0);const before=view.camera.position.clone();controller.abort();frames.shift()(500);await tour;
-  assert.ok(view.camera.position.equals(before));assert.equal(view.controls.enabled,true);
+  assert.ok(view.camera.position.distanceTo(before)<.00001);assert.equal(view.controls.enabled,true);
   const instant=view.focusTeaching({face:'U'},{duration:0});frames.shift()(0);await instant;assert.equal(view.isFacing('U'),true);
  }finally{globalThis.requestAnimationFrame=previous;}
 });

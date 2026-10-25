@@ -41,8 +41,10 @@ export const LEARN_TOPICS=[
 export function learnDemo(step){
  const face=step.face||step.answer[0];
  if(step.kind==='piece'&&step.answer==='center')return [
-  {face:'F',focus:'face',label:'Green face',caption:'6 faces. 1 center on each.'},
-  ...['F','R','B','L','U','D'].map(face=>({face,focus:'center',label:`${COLOR_NAMES[face]} center`,caption:'The center color names the face.',colors:[face]}))
+  {face:'F',look:[5,5,8],focus:'cube',label:'6 sides',caption:'A cube has 6 sides.',detail:'Let’s look at the color of each side.'},
+  {label:'The 6 colored sides',caption:'Let’s look at all 6 sides.',scenes:['F','R','B','L','U','D'].map((face,i)=>({face,focus:'face',label:`${COLOR_NAMES[face]} side`,caption:`This side is ${COLOR_NAMES[face].toLowerCase()}.`,detail:`Side ${i+1} of 6 · Look at the whole highlighted side.`,colors:[face]}))},
+  {face:'F',focus:'face',label:'1 side = 1 face',caption:'Each side is called a face.',detail:'There are 6 sides, so a cube has 6 faces.'},
+  {label:'Centers name the faces',caption:'The center color names the face.',scenes:['F','R','B','L','U','D'].map(face=>({face,focus:'center',label:`${COLOR_NAMES[face]} center`,caption:'The center color names the face.',detail:`The ${COLOR_NAMES[face].toLowerCase()} center marks the ${COLOR_NAMES[face].toLowerCase()} face. Look at the middle square.`,colors:[face]}))}
  ];
  if(step.kind==='piece'){
   const edge=step.answer==='edge';
@@ -66,6 +68,13 @@ export function learnDemo(step){
  ];
 }
 
+export function learnSceneTiming(scene){
+ return {camera:1400,turn:scene.turn?2000:0,hold:Math.max(3200,`${scene.caption} ${scene.detail||''}`.length*55)};
+}
+export function learnDemoDuration(beat){
+ return (beat.scenes||[beat]).reduce((total,scene)=>total+Object.values(learnSceneTiming(scene)).reduce((sum,ms)=>sum+ms,0),0);
+}
+
 export function learnTask(step){
  if(step.kind==='piece'&&step.answer==='center')return `Rotate to the ${COLOR_NAMES[step.face].toLowerCase()} face. Tap the center.`;
  if(step.kind==='piece')return `Find ${COLOR_NAMES[step.face].toLowerCase()}. Tap ${step.answer==='center'?'the':step.answer==='edge'?'an':'a'} ${step.answer}.`;
@@ -84,11 +93,13 @@ export function readLearnProgress(raw){
 
 // Paused time does not count toward camera motion, layer turns, or scene holds.
 export function createLearnClock(now=()=>performance.now()){
- let pausedAt=null,offset=0;
+ let paused=false,rate=1,previous=now(),elapsed=0;
+ function tick(){const current=now();if(!paused)elapsed+=(current-previous)*rate;previous=current;return elapsed;}
  return {
-  get paused(){return pausedAt!==null;},
-  now:()=>(pausedAt??now())-offset,
-  pause(){pausedAt??=now();},
-  play(){if(pausedAt!==null){offset+=now()-pausedAt;pausedAt=null;}}
+  get paused(){return paused;},
+  now:tick,
+  pause(){tick();paused=true;},
+  play(){tick();paused=false;},
+  setRate(value){if(!Number.isFinite(value)||value<=0)return;tick();rate=value;}
  };
 }

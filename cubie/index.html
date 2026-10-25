@@ -30,7 +30,8 @@
         <div class="stage-top"><span id="cube-status">Your cube</span><div class="stage-tools"><button class="icon-button" id="home-view" aria-label="Reset view" title="Reset view"><i data-lucide="rotate-ccw"></i></button></div></div>
         <div id="practice-prompt" class="trainer-prompt hidden" role="status" aria-live="polite" aria-atomic="true"><strong id="trainer-move">—</strong></div>
         <div id="cube-canvas" role="img" aria-label="3D cube. Swipe a row to turn it. Drag outside the cube to look around. Use the side buttons below for precise turns."></div>
-        <div id="learn-visual" class="learn-visual hidden" aria-live="polite" aria-atomic="true"><strong id="learn-caption"></strong><div id="learn-colors" class="learn-colors"></div></div>
+        <div id="learn-visual" class="learn-visual hidden" aria-live="polite" aria-atomic="true"><span id="learn-scene" class="eyebrow"></span><strong id="learn-caption"></strong><p id="learn-detail"></p><div id="learn-colors" class="learn-colors"></div></div>
+        <div id="learn-step-progress" class="learn-step-progress hidden" role="progressbar" aria-label="Watch step progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
         <div class="stage-bottom">Swipe a row to turn. Drag outside to look.</div>
         <div class="face-labels hidden" id="face-labels"><span class="face-label label-up">U · Up</span><span class="face-label label-front">F · Front</span><span class="face-label label-right">R · Right</span></div>
       </div>
@@ -43,16 +44,16 @@
           <button id="learn-practice" class="primary hidden">Ready for Practice <i data-lucide="arrow-right"></i></button>
         </div>
         <div id="learn-lesson" class="hidden">
-          <div class="learn-back-row"><button class="text-button" id="learn-back">← All topics</button><div class="learn-step-status"><span id="learn-topic-name"></span><progress id="learn-progress" value="0" max="1" aria-label="Topic progress"></progress><span id="learn-count"></span></div></div>
+          <div class="learn-back-row"><button class="text-button" id="learn-back">← All topics</button><div class="learn-step-status"><span id="learn-topic-name"></span><div id="learn-progress" role="group" aria-label="Topic lessons"></div><span id="learn-count"></span></div></div>
           <h2 id="learn-title" tabindex="-1"></h2>
-          <div class="learn-watch-row"><span id="learn-watch-status">1 · Watch</span><span id="learn-try-status">2 · Try</span><span id="learn-check-status">3 · Check</span></div>
-          <div id="learn-demo-controls" class="learn-demo-controls"><button id="learn-play" class="secondary"><i data-lucide="play"></i>Play</button><button id="learn-demo" class="secondary"><i data-lucide="rotate-ccw"></i>Replay</button><button id="learn-try" class="primary">Try it <i data-lucide="arrow-right"></i></button></div>
+          <div class="learn-watch-row" role="group" aria-label="Lesson section"><button id="learn-watch-status" aria-pressed="true">1 · Watch</button><button id="learn-try-status" aria-pressed="false">2 · Try</button></div>
+          <div id="learn-demo-controls" class="learn-demo-controls"><button id="learn-play" class="secondary"><i data-lucide="play"></i>Play</button><button id="learn-demo" class="secondary"><i data-lucide="rotate-ccw"></i>Replay</button><select id="learn-speed" aria-label="Watch speed"><option value="0.75">Slower · 0.75×</option><option value="1" selected>Gentle · 1×</option><option value="1.5">Faster · 1.5×</option></select></div>
           <div id="learn-beats" class="learn-beats" role="group" aria-label="Demonstration steps"></div>
           <details id="learn-explanation"><summary>Why it works <i data-lucide="chevron-down"></i></summary><p id="learn-copy" class="learn-copy"></p></details>
           <div class="learn-task"><p id="learn-task"></p></div>
           <p id="learn-direction" class="muted hidden">View direction from the face you turn.</p>
           <p id="learn-feedback" class="learn-feedback" role="status" aria-live="polite"></p>
-          <div class="learn-assist"><button id="learn-hint" class="text-button" aria-controls="learn-hint-copy">Give me a hint</button><button id="learn-motion" class="motion-toggle" aria-label="Animation" aria-pressed="true"><span>Animation</span><span class="motion-track" aria-hidden="true"></span></button><button id="learn-hear" class="icon-button" aria-label="Hear this instruction"><i data-lucide="volume-2"></i></button></div>
+          <div class="learn-assist"><button id="learn-hint" class="text-button" aria-controls="learn-hint-copy">Give me a hint</button><button id="learn-hear" class="icon-button" aria-label="Hear this instruction"><i data-lucide="volume-2"></i></button></div>
           <p id="learn-hint-copy" class="muted hidden"></p>
           <button id="learn-check-view" class="secondary hidden">Check my view</button>
           <button id="learn-next" class="primary" disabled>Continue <i data-lucide="arrow-right"></i></button>

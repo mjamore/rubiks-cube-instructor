@@ -49,11 +49,11 @@ test('every learning step has a finite visual demonstration and a concise hands-
  const {learnDemo,learnTask}=await import('../src/learn.js');
  for(const topic of LEARN_TOPICS)for(const step of topic.steps){
   const beats=learnDemo(step);
-  assert.ok(beats.length>=2&&beats.length<=7);
+  assert.ok(beats.length>=2&&beats.length<=4);
   assert.ok(learnTask(step).length<85);
-  for(const beat of beats){
+  for(const beat of beats.flatMap(beat=>beat.scenes||[beat])){
    assert.ok(FACES.includes(beat.face));assert.ok(beat.caption&&beat.label);
-   assert.ok(['face','center','edge','corner','layer'].includes(beat.focus));
+   assert.ok(['cube','face','center','edge','corner','layer'].includes(beat.focus));
    if(beat.position)assert.equal(pieceKind(beat.position),beat.focus);
   }
   if(step.kind==='turn'){
@@ -62,8 +62,22 @@ test('every learning step has a finite visual demonstration and a concise hands-
    assert.equal(beats.find(b=>b.arrow).arrow,step.answer.endsWith("'")?-1:1);
   }else assert.ok(beats.every(b=>!b.turn),'looking never mutates the cube');
  }
- const centers=learnDemo(LEARN_TOPICS[0].steps[0]).filter(b=>b.focus==='center');
+ const centers=learnDemo(LEARN_TOPICS[0].steps[0]).flatMap(beat=>beat.scenes||[beat]).filter(b=>b.focus==='center');
  assert.deepEqual(new Set(centers.map(b=>b.face)),new Set(FACES),'tour includes all six centers');
+});
+
+test('faces and centers introduces six colored sides before faces and center colors',async()=>{
+ const {learnDemo}=await import('../src/learn.js');
+ const beats=learnDemo(LEARN_TOPICS[0].steps[0]);
+ assert.equal(beats[0].caption,'A cube has 6 sides.');assert.equal(beats[0].focus,'cube');
+ assert.equal(beats.length,4,'the six sides and six centers are each one Watch step');
+ const sides=beats[1].scenes;
+ assert.deepEqual(sides.map(b=>b.face),['F','R','B','L','U','D']);
+ assert.deepEqual(sides.map(b=>b.caption),['green','red','blue','orange','white','yellow'].map(color=>`This side is ${color}.`));
+ assert.ok(sides.every(b=>b.focus==='face'&&!b.caption.includes('center')));
+ assert.equal(beats[2].caption,'Each side is called a face.');
+ assert.equal(beats[3].scenes.length,6);
+ assert.ok(beats[3].scenes.every(b=>b.focus==='center'&&b.detail.includes('middle square')));
 });
 
 test('the blue-center exercise names the unique center precisely',async()=>{
@@ -91,4 +105,30 @@ test('the playback clock freezes at pause and resumes without counting paused ti
  clock.play();assert.equal(clock.paused,false);assert.equal(clock.now(),500);
  time=3000;assert.equal(clock.now(),1000);clock.play();assert.equal(clock.now(),1000);
  time=3200;clock.pause();time=8000;clock.play();assert.equal(clock.now(),1200);
+});
+test('watch speed changes the running clock continuously, including while paused',async()=>{
+ const {createLearnClock}=await import('../src/learn.js');let time=0;const clock=createLearnClock(()=>time);
+ time=1000;assert.equal(clock.now(),1000);clock.setRate(.75);
+ time=2000;assert.equal(clock.now(),1750);clock.pause();clock.setRate(1.5);
+ time=6000;assert.equal(clock.now(),1750);clock.play();
+ time=7000;assert.equal(clock.now(),3250);
+ for(const rate of [0,-1,NaN,Infinity])clock.setRate(rate);
+ time=8000;assert.equal(clock.now(),4750);
+});
+
+test('step progress includes every camera move, layer turn, and reading hold in a grouped tour',async()=>{
+ const {learnDemo,learnSceneTiming,learnDemoDuration}=await import('../src/learn.js');
+ for(const topic of LEARN_TOPICS)for(const step of topic.steps)for(const beat of learnDemo(step)){
+  const scenes=beat.scenes||[beat];let duration=0;
+  for(const scene of scenes){
+   const timing=learnSceneTiming(scene);
+   assert.equal(timing.camera,1400);assert.equal(timing.turn,scene.turn?2000:0);assert.ok(timing.hold>=3200);
+   duration+=timing.camera+timing.turn+timing.hold;
+  }
+  assert.equal(learnDemoDuration(beat),duration);
+ }
+ const beat=learnDemo(LEARN_TOPICS[0].steps[0])[1],duration=learnDemoDuration(beat);
+ const {createLearnClock}=await import('../src/learn.js');let time=0;const clock=createLearnClock(()=>time);
+ time=duration/4;assert.equal(clock.now()/duration,.25);clock.pause();time=duration;assert.equal(clock.now()/duration,.25);
+ clock.setRate(1.5);clock.play();time+=duration/4;assert.equal(clock.now()/duration,.625);
 });

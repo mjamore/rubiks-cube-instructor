@@ -4,7 +4,7 @@ const icons={ArrowRight, Camera, ChevronDown, CircleHelp, Eye, Maximize, Pause, 
 import {CubeView} from './cube-view.js';
 import {Cube,FACES,COLORS,NAMES,COLOR_NAMES,SOLVED,LESSONS,lessonState,inverse,scramble,explain,validateState,classifyColor,coordinates} from './cube-state.js';
 import {nextPracticeMove,checkPracticeTurn} from './practice.js';
-import {LEARN_TOPICS,checkLearnPick,pieceKind,learnDemo,learnTask,readLearnProgress,createLearnClock} from './learn.js';
+import {LEARN_TOPICS,checkLearnPick,pieceKind,learnDemo,learnSceneTiming,learnDemoDuration,learnTask,readLearnProgress,createLearnClock} from './learn.js';
 import {createNarrator} from './voice.js';
 const $=id=>document.getElementById(id);
 const refreshIcons=()=>createIcons({icons,attrs:{'aria-hidden':'true'}});
@@ -26,7 +26,7 @@ const isBusy=()=>!view||view.busy;
 function pause(){playing=false;playVersion++;narrator.cancel();updateTransport();}
 function invalidate(){pause();solution=[];step=0;requestId++;solving=false;clearTimeout(solverTimer);renderPlayback();}
 function updateState(){renderFaces();const item=mode==='learn'?currentLearnStep():null;$('cube-status').textContent=mode==='learn'?(item?item.kind==='turn'?`Try ${item.answer.replace("'",'′')}`:item.kind==='piece'?`Find ${item.answer==='edge'?'an':'a'} ${item.answer}`:item.kind==='face'?`Find ${item.answer} · ${NAMES[item.answer]}`:'Look at the back face':'Choose a topic to begin'):cube.isSolved()?'All colors match':mode==='practice'?'Practice cube':'Your cube';$('undo').disabled=!history.length||isBusy();}
-async function perform(move,{manual=false,record=true,duration}={}){if(isBusy()||(manual&&mode==='practice'))return false;if(manual&&mode==='learn')return learnTurn(move);if(manual)invalidate();const next=cube.clone();next.move(move);if(record)history.push(move);cube=next;updateState();try{await view.turn(move,cube.asString(),(mode==='learn'?!learning.motion:matchMedia('(prefers-reduced-motion: reduce)').matches)?0:duration??550);}finally{updateState();}return true;}
+async function perform(move,{manual=false,record=true,duration}={}){if(isBusy()||(manual&&mode==='practice'))return false;if(manual&&mode==='learn')return learnTurn(move);if(manual)invalidate();const next=cube.clone();next.move(move);if(record)history.push(move);cube=next;updateState();try{await view.turn(move,cube.asString(),(mode!=='learn'&&matchMedia('(prefers-reduced-motion: reduce)').matches)?0:duration??550);}finally{updateState();}return true;}
 function renderFaces(){const key=String(reverse)+String(halfTurns)+cube.asString().split('').filter((_,i)=>i%9===4).join('');if(key===lastFaceKey)return;lastFaceKey=key;const node=$('face-buttons');node.innerHTML=FACES.map(f=>`<button class="face-button" data-face="${f}" aria-label="Turn ${NAMES[f].toLowerCase()} side ${halfTurns?'half turn':reverse?'counterclockwise':'clockwise'}"><b><span class="face-dot" style="--face:${COLORS[cube.asString()[FACES.indexOf(f)*9+4]]}"></span>${f}${halfTurns?'2':reverse?'′':''}</b><span>${NAMES[f]}</span></button>`).join('');node.querySelectorAll('button').forEach(b=>b.onclick=()=>perform(b.dataset.face+(halfTurns?'2':reverse?"'":''),{manual:true}));}
 $('half-turns').onclick=()=>{halfTurns=!halfTurns;$('half-turns').setAttribute('aria-pressed',halfTurns);renderFaces();};
 $('reverse').onclick=()=>{halfTurns=false;$('half-turns').setAttribute('aria-pressed',false);reverse=!reverse;$('reverse').setAttribute('aria-pressed',reverse);renderFaces();};
@@ -182,8 +182,8 @@ $('trainer-replay').onclick=()=>{
 };
 $('trainer-pace').onchange=$('trainer-animation-speed').onchange=()=>{if(trainer.active)trainer.deadline=performance.now()+practiceInterval();};
 // Learn uses its own prepared cube; leaving restores the user's solve/practice state.
-let savedLearnMotion,savedLearnPositions=readLearnProgress();try{savedLearnMotion=localStorage.getItem('cubie-learn-motion');savedLearnPositions=readLearnProgress(localStorage.getItem('cubie-learn-progress'));}catch{}
-const learning={motion:savedLearnMotion?savedLearnMotion==='on':!matchMedia('(prefers-reduced-motion: reduce)').matches,topic:null,positions:savedLearnPositions,completed:[...savedLearnPositions],answered:false,partial:null,flatFace:'F',moves:[],demo:false,beat:0,clock:createLearnClock(),phase:'try',controller:null,run:null};
+let savedLearnSpeed,savedLearnPositions=readLearnProgress();try{savedLearnSpeed=localStorage.getItem('cubie-learn-speed');savedLearnPositions=readLearnProgress(localStorage.getItem('cubie-learn-progress'));}catch{}
+const learning={topic:null,positions:savedLearnPositions,completed:[...savedLearnPositions],answered:false,partial:null,flatFace:'F',moves:[],demo:false,beat:0,clock:createLearnClock(),phase:'try',controller:null,run:null};
 let learnVersion=0;
 const currentLearnTopic=()=>LEARN_TOPICS[learning.topic];
 const currentLearnStep=()=>currentLearnTopic()?.steps[learning.positions[learning.topic]];
@@ -204,8 +204,7 @@ function renderLearnFlat(){
  $('learn-flat-grid').querySelectorAll('button').forEach(button=>button.onclick=()=>learnPick({face:learning.flatFace,position:coordinates(learning.flatFace,Number(button.dataset.square))}));
 }
 function renderLearn({focus=false}={}){
- if(learning.answered&&learning.topic!==null)learning.positions[learning.topic]=learning.completed[learning.topic];
- const topic=currentLearnTopic(),item=currentLearnStep(),complete=topic&&topicDone(learning.topic);
+ const topic=currentLearnTopic(),item=currentLearnStep(),complete=topic&&!item&&topicDone(learning.topic);
  $('cube-canvas').setAttribute('aria-label',item?.kind==='turn'?'3D learning cube. Swipe a face to turn a layer, or use the side buttons under the task. Drag outside the cube to look around.':'3D learning cube. Drag to look around. Tap a piece to answer, or use the flat view.');
  stopLearnDemo();learning.answered=false;learning.partial=null;learning.phase=item?'watch':'try';learnVersion++;narrator.cancel();
  view.clearTeaching();updateState();
@@ -215,12 +214,14 @@ function renderLearn({focus=false}={}){
  if(item){
   document.querySelector('.learn-watch-row').after($('learn-visual'));
   $('learn-visual').after($('cube-canvas'));
+  $('cube-canvas').after($('learn-step-progress'));
   $('learn-beats').after(document.querySelector('.stage-bottom'));
   $('learn-feedback').after($('learn-demo-controls'));
   $('learn-lesson').appendChild($('learn-explanation'));
   $('learn-lesson').appendChild($('learn-flat'));
  }
  $('learn-visual').classList.toggle('hidden',!item);
+ $('learn-step-progress').classList.toggle('hidden',!item);
  $('learn-explanation').open=false;
  $('learn-menu').classList.toggle('hidden',!!topic);
  $('learn-lesson').classList.toggle('hidden',!item);
@@ -235,15 +236,14 @@ function renderLearn({focus=false}={}){
  $('learn-topics').innerHTML=LEARN_TOPICS.map((t,i)=>`<button data-topic="${i}" class="learn-topic"><span class="topic-symbol" aria-hidden="true">${topicDone(i)?'✓':t.symbol}</span><span><strong>${t.name}</strong><small>${t.subtitle}</small></span><span class="topic-time">${topicDone(i)?'Learned':learning.completed[i]?`Resume · ${learning.completed[i]}/${t.steps.length}`:t.time}<span aria-hidden="true"> →</span></span></button>`).join('');
  $('learn-topics').querySelectorAll('button').forEach(button=>button.onclick=()=>openLearnTopic(Number(button.dataset.topic)));
  if(item){
-  $('learn-topic-name').textContent=topic.name;$('learn-count').textContent=`${learning.positions[learning.topic]+1} / ${topic.steps.length}`;
-  $('learn-progress').max=topic.steps.length;$('learn-progress').value=learning.positions[learning.topic];
+  renderLearnSteps();
   $('learn-title').textContent=item.title;$('learn-copy').innerHTML=item.copy;$('learn-task').textContent=learnTask(item);
   $('learn-direction').classList.toggle('hidden',item.kind!=='turn');
   $('learn-hint-copy').textContent=item.hint;$('learn-hint-copy').classList.add('hidden');$('learn-hint').setAttribute('aria-expanded',false);
   $('learn-next').disabled=true;$('learn-next').innerHTML=`${learning.positions[learning.topic]===topic.steps.length-1?'Finish topic':'Continue'}<i data-lucide="arrow-right"></i>`;
   $('learn-check-view').classList.toggle('hidden',item.kind!=='view');
   $('learn-demo-controls').appendChild($('learn-next'));
-  $('learn-beats').innerHTML=learnDemo(item).map((beat,i)=>`<button data-beat="${i}" aria-label="Watch scene ${i+1}: ${beat.label}">${i+1}</button>`).join('');
+  $('learn-beats').innerHTML=learnDemo(item).map((beat,i)=>`<button data-beat="${i}" aria-label="Watch step ${i+1}: ${beat.label}">${i+1}</button>`).join('');
   $('learn-beats').querySelectorAll('button').forEach(button=>button.onclick=()=>startLearnDemo(Number(button.dataset.beat),false));
   learnFeedback('');renderLearnFlat();
   if(focus)$('learn-title').focus({preventScroll:true});
@@ -258,11 +258,18 @@ function renderLearn({focus=false}={}){
  if(focus&&item)$('stage').scrollIntoView({block:'start'});
  if(item)queueMicrotask(()=>startLearnDemo());
 }
-function openLearnTopic(index){if(isBusy())return;learning.topic=index;learning.positions[index]=learning.completed[index];learning.answered=false;renderLearn({focus:true});}
+function renderLearnSteps(){
+ const topic=currentLearnTopic(),position=learning.positions[learning.topic],completed=learning.completed[learning.topic];
+ $('learn-topic-name').textContent=topic.name;$('learn-count').textContent=`${position+1} / ${topic.steps.length}`;
+ $('learn-progress').innerHTML=topic.steps.map((step,i)=>`<button data-step="${i}" class="${i<completed?'completed':''}" ${i===position?'aria-current="step"':''} ${i>completed?'disabled':''} aria-label="Lesson ${i+1}: ${step.title}${i<completed?' — completed, replay':''}" title="${step.title}"><span aria-hidden="true"></span></button>`).join('');
+ $('learn-progress').querySelectorAll('button').forEach(button=>button.onclick=()=>{
+  if(isBusy())return;learning.positions[learning.topic]=Number(button.dataset.step);learning.answered=false;renderLearn({focus:true});
+ });
+}
+function openLearnTopic(index){if(isBusy())return;learning.topic=index;learning.positions[index]=topicDone(index)?0:learning.completed[index];learning.answered=false;renderLearn({focus:true});}
 function finishLearnAnswer(){
- learning.answered=true;setLearnPhase('checked');$('learn-caption').textContent='You got it!';$('learn-next').disabled=false;$('cube-status').textContent='You got it!';
- $('learn-progress').value=learning.positions[learning.topic]+1;
- learning.completed[learning.topic]=Math.max(learning.completed[learning.topic],learning.positions[learning.topic]+1);saveLearnProgress();learnFeedback(currentLearnStep().success,'correct');$('learn-next').focus({preventScroll:true});
+ learning.answered=true;setLearnPhase('try');$('learn-caption').textContent='You got it!';$('learn-next').disabled=false;$('cube-status').textContent='You got it!';
+ learning.completed[learning.topic]=Math.max(learning.completed[learning.topic],learning.positions[learning.topic]+1);saveLearnProgress();renderLearnSteps();learnFeedback(currentLearnStep().success,'correct');$('learn-next').focus({preventScroll:true});
 }
 function learnPick(pick){
  const item=currentLearnStep();if(mode!=='learn'||!item||learning.answered||isBusy()||learning.phase!=='try'||!['piece','face'].includes(item.kind))return;
@@ -283,17 +290,19 @@ async function learnTurn(move){
  return true;
 }
 $('learn-back').onclick=$('learn-all').onclick=()=>{if(isBusy())return;learning.topic=null;renderLearn();$('learn-topics').querySelector('button').focus({preventScroll:true});};
-$('learn-review').onclick=()=>{learning.positions[learning.topic]=learning.completed[learning.topic]=0;learning.answered=false;saveLearnProgress();renderLearn({focus:true});};
+$('learn-review').onclick=()=>{learning.positions[learning.topic]=0;learning.answered=false;renderLearn({focus:true});};
 $('learn-next').onclick=()=>{if(!learning.answered||isBusy())return;learning.positions[learning.topic]++;learning.answered=false;saveLearnProgress();renderLearn({focus:true});};
 $('learn-hint').onclick=()=>{const hidden=$('learn-hint-copy').classList.toggle('hidden');$('learn-hint').setAttribute('aria-expanded',!hidden);};
- $('learn-hear').onclick=()=>{const item=currentLearnStep();if(item)narrator.say(`${$('learn-copy').textContent} ${item.task}`);};
+$('learn-hear').onclick=()=>{if(currentLearnStep())narrator.say(`${$('learn-caption').textContent} ${$('learn-detail').textContent}`);};
 $('learn-check-view').onclick=()=>{const item=currentLearnStep();if(!item||learning.answered||learning.phase!=='try')return;if(view.isFacing(item.answer))finishLearnAnswer();else learnFeedback('Keep looking around until the blue face points toward you. Then check again.','wrong');};
 function setLearnPhase(phase){
  learning.phase=phase;
  $('learn-visual').classList.toggle('is-exercise',phase==='try');
- for(const [id,value] of [['learn-watch-status','watch'],['learn-try-status','try'],['learn-check-status','checked']])$(id).classList.toggle('active',phase===value);
+ for(const [id,value] of [['learn-watch-status','watch'],['learn-try-status','try']]){$(id).classList.toggle('active',phase===value);$(id).setAttribute('aria-pressed',phase===value);}
+ $('learn-beats').classList.toggle('hidden',phase!=='watch');
+ $('learn-speed').classList.toggle('hidden',phase!=='watch');
+ $('learn-step-progress').classList.toggle('hidden',phase!=='watch');
  $('learn-task').textContent=learnTask(currentLearnStep());
- $('learn-try').classList.toggle('hidden',phase!=='watch');
  $('learn-play').classList.toggle('hidden',phase!=='watch');
  $('learn-next').classList.toggle('hidden',phase==='watch');
  $('learn-check-view').disabled=phase!=='try';
@@ -316,7 +325,7 @@ function pauseLearnDemo(){
 }
 function stopLearnDemo(){
  learning.controller?.abort();learning.controller=null;learning.demo=false;learning.clock.play();
- if(view){view.focusVersion=(view.focusVersion||0)+1;view.controls.enabled=true;view.focusing=false;}
+ view?.stopFocus();
  renderLearnPlay();
 }
 function demoHold(ms,signal,clock){
@@ -326,14 +335,23 @@ function demoHold(ms,signal,clock){
   requestAnimationFrame(frame);
  });
 }
+function trackLearnStep(beat,signal,clock){
+ const bar=$('learn-step-progress'),fill=bar.firstElementChild,start=clock.now(),duration=learnDemoDuration(beat);
+ let active=true;
+ const render=value=>{fill.style.transform=`scaleX(${value})`;bar.setAttribute('aria-valuenow',Math.round(value*100));};
+ const frame=()=>{if(!active||signal.aborted)return;render(Math.min(.99,(clock.now()-start)/duration));requestAnimationFrame(frame);};
+ render(0);requestAnimationFrame(frame);
+ return complete=>{active=false;if(complete)render(1);};
+}
 async function rewindLearnMoves(signal){
  view.clearTeaching();
  if(learning.moves.length)$('learn-caption').textContent='Rewinding…';
  while(learning.moves.length&&!signal.aborted){
-  const move=inverse(learning.moves.pop());cube.move(move);await view.turn(move,cube.asString(),learning.motion?700:0,{clock:learning.clock});
+  const move=inverse(learning.moves.pop());cube.move(move);await view.turn(move,cube.asString(),700,{clock:learning.clock});
  }
 }
 function startLearnTry(){
+ if(isBusy()&&!learning.demo)return;
  const version=learnVersion,previous=learning.run;stopLearnDemo();
  const controller=new AbortController();learning.controller=controller;learning.demo=true;
  renderLearnPlay();
@@ -344,11 +362,11 @@ function startLearnTry(){
   if(controller.signal.aborted)return;
   resetLearnCube();
   const item=currentLearnStep();
-  await view.focusTeaching({face:item.kind==='turn'?item.answer[0]:'F',...(item.kind==='turn'?{}:{look:[0,5.4,10.7]})},{signal:controller.signal,clock:learning.clock,duration:learning.motion?1000:0});
+  await view.focusTeaching({face:item.kind==='turn'?item.answer[0]:'F',...(item.kind==='turn'?{}:{look:[0,5.4,10.7]})},{signal:controller.signal,clock:learning.clock,duration:1400});
   if(controller.signal.aborted)return;
-  learning.demo=false;learning.controller=null;learning.partial=null;learning.answered=false;setLearnPhase('try');
+  learning.demo=false;learning.controller=null;learning.partial=null;learning.answered=false;$('learn-next').disabled=true;setLearnPhase('try');
   renderLearnPlay();
-  $('learn-caption').textContent=learnTask(item);$('learn-colors').replaceChildren();
+  $('learn-scene').textContent='';$('learn-caption').textContent=learnTask(item);$('learn-detail').textContent='';$('learn-colors').replaceChildren();
   $('learn-beats').querySelectorAll('button').forEach(button=>button.removeAttribute('aria-current'));
   learnFeedback('');renderLearnFlat();updateState();
  })();
@@ -361,25 +379,33 @@ function startLearnDemo(start=0,autoplay=true){
  learning.run=(async()=>{
   await previous;
   if(signal.aborted||version!==learnVersion)return;
-  const item=currentLearnStep(),beats=learnDemo(item),reduced=!learning.motion,clock=learning.clock;
+  const item=currentLearnStep(),beats=learnDemo(item),clock=learning.clock;
   await rewindLearnMoves(signal);if(signal.aborted||version!==learnVersion)return;
   resetLearnCube();learning.partial=null;learning.answered=false;$('learn-next').disabled=true;setLearnPhase('watch');learnFeedback('');
   renderLearnPlay();
-  for(const beat of beats.slice(0,start))if(beat.turn){cube.move(beat.turn);learning.moves.push(beat.turn);await view.turn(beat.turn,cube.asString(),reduced?0:700,{clock});if(signal.aborted)return;}
+  for(const scene of beats.slice(0,start).flatMap(beat=>beat.scenes||[beat]))if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),700,{clock});if(signal.aborted)return;}
   try{
    for(let i=start;i<beats.length;i++){
     if(signal.aborted||version!==learnVersion)return;
-    const beat=beats[i];learning.beat=i;view.teach(beat);
+    const beat=beats[i];learning.beat=i;
+    $('learn-scene').textContent=`Step ${i+1} of ${beats.length}`;
     $('learn-caption').textContent=beat.caption;
-    $('learn-colors').innerHTML=(beat.colors||[]).map(face=>`<span><i style="background:${COLORS[face]}"></i>${COLOR_NAMES[face]}</span>`).join('');
+    $('learn-step-progress').setAttribute('aria-label',`Step ${i+1} of ${beats.length} progress`);
     $('learn-beats').querySelectorAll('button').forEach((button,index)=>{if(index===i)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');});
-    await view.focusTeaching(beat,{signal,clock,duration:reduced?0:1000});
-    if(signal.aborted||version!==learnVersion)return;
-    if(beat.turn){
-     cube.move(beat.turn);learning.moves.push(beat.turn);await view.turn(beat.turn,cube.asString(),reduced?0:1500,{clock});
-    }
+    const finishProgress=trackLearnStep(beat,signal,clock);
+    try{
+     for(const scene of beat.scenes||[beat]){
+      if(signal.aborted||version!==learnVersion)return;
+      const timing=learnSceneTiming(scene);view.teach(scene);
+      $('learn-detail').textContent=beat.scenes?(scene.focus==='face'?scene.caption:scene.detail):scene.detail||'';
+      $('learn-colors').innerHTML=(scene.colors||[]).map(face=>`<span><i style="background:${COLORS[face]}"></i>${COLOR_NAMES[face]}</span>`).join('');
+      await view.focusTeaching(scene,{signal,clock,duration:timing.camera});
+      if(signal.aborted||version!==learnVersion)return;
+      if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),timing.turn,{clock});}
+      await demoHold(timing.hold,signal,clock);
+     }
+    }finally{finishProgress(!signal.aborted);}
     if(!autoplay)return;
-    await demoHold(beat.turn?900:1400,signal,clock);
    }
   }catch(error){console.error(error);if(!signal.aborted)learnFeedback('Replay the demo, or try it yourself.');return;}
   finally{
@@ -391,17 +417,16 @@ function startLearnDemo(start=0,autoplay=true){
   }
  })();
 }
-function renderLearnMotion(){
- $('learn-motion').setAttribute('aria-pressed',learning.motion);$('learn-motion').title=learning.motion?'Animation on':'Animation off';
-}
-$('learn-motion').onclick=()=>{
- learning.motion=!learning.motion;try{localStorage.setItem('cubie-learn-motion',learning.motion?'on':'off');}catch{}
- renderLearnMotion();if(learning.phase==='watch')startLearnDemo(Number($('learn-beats').querySelector('[aria-current=step]')?.dataset.beat||0),false);
+$('learn-speed').value=['0.75','1','1.5'].includes(savedLearnSpeed)?savedLearnSpeed:'1';
+learning.clock.setRate(Number($('learn-speed').value));
+$('learn-speed').onchange=()=>{
+ learning.clock.setRate(Number($('learn-speed').value));
+ try{localStorage.setItem('cubie-learn-speed',$('learn-speed').value);}catch{toast('Watch speed couldn’t be saved in this browser.');}
 };
-renderLearnMotion();
+$('learn-watch-status').onclick=()=>{if(learning.phase!=='watch')startLearnDemo();};
+$('learn-try-status').onclick=()=>{if(learning.phase!=='try')startLearnTry();};
 $('learn-play').onclick=()=>{if(!learning.demo)startLearnDemo(learning.beat);else if(learning.clock.paused){learning.clock.play();renderLearnPlay();}else pauseLearnDemo();};
 $('learn-demo').onclick=()=>startLearnDemo();
-$('learn-try').onclick=startLearnTry;
 $('learn-practice').onclick=()=>changeMode('practice');
 // Six-face capture and manual correction. No frame or face data leaves this device.
 let cameraVersion=0,stream=null,scanFace=0,paint='U',scanState=SOLVED.split(''),reviewed=new Set();
