@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "portless run vite --host 127.0.0.1",
     "build": "vite build",
     "test": "node --test tests/*.test.js",
     "preview": "vite preview --host 127.0.0.1"
@@ -14,6 +14,7 @@
     "lucide": "^0.468.0"
   },
   "devDependencies": {
+    "portless": "^0.15.8",
     "vite": "^7.1.0"
   }
 }

@@ -4,6 +4,7 @@ import {mkdirSync,writeFileSync,mkdtempSync,rmSync,statSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {FACES,LESSONS,explain} from '../src/cube-state.js';
+import {spokenText} from '../src/voice.js';
 const sentences=[
  'Let’s learn one move at a time.',
  'You did it! All the colors match.',
@@ -18,7 +19,7 @@ const clips={};
 try{
  for(const [i,text] of [...new Set(sentences)].entries()){
   const file=`instruction-${String(i+1).padStart(2,'0')}.m4a`,aiff=join(directory,'voice.aiff');
-  execFileSync('/usr/bin/say',['-v','Samantha','-r','155','-o',aiff,text]);
+  execFileSync('/usr/bin/say',['-v','Samantha','-r','155','-o',aiff,spokenText(text)]);
   execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',aiff,'-codec:a','aac','-b:a','64k',join('public/voice',file)]);
   if(statSync(join('public/voice',file)).size<1000)throw new Error('The speech engine produced no audio. Run with access to the macOS speech service.');
   clips[text]=`/voice/${file}`;

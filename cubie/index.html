@@ -15,9 +15,9 @@
 <header class="header">
   <a class="brand" href="./" aria-label="Cubie home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>cubie</a>
   <nav aria-label="Choose a mode">
-    <button class="nav-item active" id="playground-nav" aria-pressed="true">Play</button>
+    <button class="nav-item active" id="learn-nav" aria-pressed="true">Learn</button>
     <button class="nav-item" id="practice-nav" aria-pressed="false">Practice</button>
-    <button class="nav-item" id="learn-nav" aria-pressed="false">Solve</button>
+    <button class="nav-item" id="solve-nav" aria-pressed="false">Solve</button>
   </nav>
   <div class="header-actions">
     <button id="voice-toggle" class="voice-toggle" aria-pressed="true" title="Friendly spoken instructions"><i data-lucide="volume-2"></i><span>Voice on</span></button>
@@ -25,28 +25,62 @@
   </div>
 </header>
 <main>
-  <div class="workspace playground-mode">
+  <div class="workspace learn-mode">
       <div class="stage" id="stage" role="region" aria-label="Cube">
         <div class="stage-top"><span id="cube-status">Your cube</span><div class="stage-tools"><button class="icon-button" id="home-view" aria-label="Reset view" title="Reset view"><i data-lucide="rotate-ccw"></i></button></div></div>
+        <div id="practice-prompt" class="trainer-prompt hidden" role="status" aria-live="polite" aria-atomic="true"><strong id="trainer-move">—</strong></div>
         <div id="cube-canvas" role="img" aria-label="3D cube. Swipe a row to turn it. Drag outside the cube to look around. Use the side buttons below for precise turns."></div>
+        <div id="learn-visual" class="learn-visual hidden" aria-live="polite" aria-atomic="true"><strong id="learn-caption"></strong><div id="learn-colors" class="learn-colors"></div></div>
         <div class="stage-bottom">Swipe a row to turn. Drag outside to look.</div>
-        <div class="face-labels hidden" id="face-labels"><span class="face-label label-up">U · Top</span><span class="face-label label-front">F · Front</span><span class="face-label label-right">R · Right</span></div>
+        <div class="face-labels hidden" id="face-labels"><span class="face-label label-up">U · Up</span><span class="face-label label-front">F · Front</span><span class="face-label label-right">R · Right</span></div>
       </div>
-    <aside id="coach" class="coach hidden" aria-label="Instructions">
-      <section id="trainer-panel" class="hidden">
-        <div class="trainer-prompt"><div class="prompt-copy"><span class="eyebrow">YOUR TURN</span><strong id="trainer-move">R′</strong></div><p id="trainer-hint">Turn the right side backward.</p><div class="trainer-timer"><span id="trainer-timer-bar"></span></div></div>
-        <div class="trainer-feedback" id="trainer-feedback" role="status" aria-live="polite">Press Start. Try the move shown.</div>
-        <div class="trainer-actions"><button class="primary" id="trainer-start"><i data-lucide="play"></i>Start</button><button class="secondary" id="trainer-demo"><i data-lucide="eye"></i>Show me</button></div>
-        <div class="trainer-stats"><span><strong id="trainer-correct">0</strong> correct</span><span><strong id="trainer-streak">0</strong> in a row</span></div>
-        <details class="practice-settings"><summary>Practice options<i data-lucide="chevron-down"></i></summary><div>
-          <label for="trainer-pace">Speed</label><select id="trainer-pace"><option value="0">My pace · no timer</option><option value="10">Slow · 10 seconds</option><option value="6">Steady · 6 seconds</option><option value="3">Fast · 3 seconds</option><option value="1.5">Very fast · 1.5 seconds</option></select>
-          <label class="check-option"><span>Show hints</span><input type="checkbox" id="trainer-hints" checked></label>
-          <label class="check-option"><span>Include double turns</span><input type="checkbox" id="trainer-doubles"></label>
-          <button class="text-button" id="movement-guide-button">Learn the 6 sides →</button><button class="text-button muted" id="trainer-reset">Reset score</button>
-          <p class="muted">Practice checks this 3D cube. Your real cube isn’t tracked.</p>
-        </div></details>
+    <aside id="coach" class="coach" aria-label="Instructions">
+      <section id="learn-panel" aria-label="Learn the cube">
+        <div id="learn-menu">
+          <h1>Learn the cube</h1>
+          <div class="learn-overview"><span>About 5–10 minutes</span><span id="learn-total">0 / 4 topics learned</span></div>
+          <div id="learn-topics" class="learn-topics"></div>
+          <button id="learn-practice" class="primary hidden">Ready for Practice <i data-lucide="arrow-right"></i></button>
+        </div>
+        <div id="learn-lesson" class="hidden">
+          <div class="learn-back-row"><button class="text-button" id="learn-back">← All topics</button><div class="learn-step-status"><span id="learn-topic-name"></span><progress id="learn-progress" value="0" max="1" aria-label="Topic progress"></progress><span id="learn-count"></span></div></div>
+          <h2 id="learn-title" tabindex="-1"></h2>
+          <div class="learn-watch-row"><span id="learn-watch-status">1 · Watch</span><span id="learn-try-status">2 · Try</span><span id="learn-check-status">3 · Check</span></div>
+          <div id="learn-demo-controls" class="learn-demo-controls"><button id="learn-play" class="secondary"><i data-lucide="play"></i>Play</button><button id="learn-demo" class="secondary"><i data-lucide="rotate-ccw"></i>Replay</button><button id="learn-try" class="primary">Try it <i data-lucide="arrow-right"></i></button></div>
+          <div id="learn-beats" class="learn-beats" role="group" aria-label="Demonstration steps"></div>
+          <details id="learn-explanation"><summary>Why it works <i data-lucide="chevron-down"></i></summary><p id="learn-copy" class="learn-copy"></p></details>
+          <div class="learn-task"><p id="learn-task"></p></div>
+          <p id="learn-direction" class="muted hidden">View direction from the face you turn.</p>
+          <p id="learn-feedback" class="learn-feedback" role="status" aria-live="polite"></p>
+          <div class="learn-assist"><button id="learn-hint" class="text-button" aria-controls="learn-hint-copy">Give me a hint</button><button id="learn-motion" class="motion-toggle" aria-label="Animation" aria-pressed="true"><span>Animation</span><span class="motion-track" aria-hidden="true"></span></button><button id="learn-hear" class="icon-button" aria-label="Hear this instruction"><i data-lucide="volume-2"></i></button></div>
+          <p id="learn-hint-copy" class="muted hidden"></p>
+          <button id="learn-check-view" class="secondary hidden">Check my view</button>
+          <button id="learn-next" class="primary" disabled>Continue <i data-lucide="arrow-right"></i></button>
+        </div>
+        <div id="learn-complete" class="hidden">
+          <span class="eyebrow">YOU TRIED IT. YOU KNOW IT.</span>
+          <h2 id="learn-complete-title" tabindex="-1"></h2><p id="learn-takeaway" class="learn-copy"></p>
+          <button id="learn-continue" class="primary"></button>
+          <button id="learn-review" class="text-button">Try this topic again</button>
+          <button id="learn-all" class="text-button">← All topics</button>
+        </div>
       </section>
-      <section id="learning-panel">
+      <section id="trainer-panel" class="hidden" aria-label="Practice controls">
+        <h1>Practice your moves</h1>
+        <p class="muted">Keep your eyes on the screen. Follow each move on the cube in your hands.</p>
+        <div class="trainer-actions"><button class="primary" id="trainer-start"><i data-lucide="play"></i>Start</button><button class="secondary" id="trainer-replay" disabled><i data-lucide="rotate-ccw"></i>Replay move</button></div>
+        <div class="practice-settings">
+          <div class="practice-timing">
+            <div><label for="trainer-animation-speed">Animation speed</label><select id="trainer-animation-speed"><option value="2400">Slow · 2.4 seconds</option><option value="1500" selected>Steady · 1.5 seconds</option><option value="900">Quick · 0.9 seconds</option></select></div>
+            <div><label for="trainer-pace">Minimum time per move</label><select id="trainer-pace"><option value="10">Slow · 10 seconds</option><option value="6" selected>Steady · 6 seconds</option><option value="3">Fast · 3 seconds</option><option value="1.5">Very fast · 1.5 seconds</option></select></div>
+          </div>
+          <label class="check-option"><span>Include double turns</span><input type="checkbox" id="trainer-doubles"></label>
+          <fieldset class="practice-faces"><legend>Practice sides</legend><div id="trainer-faces"></div></fieldset>
+        </div>
+        <p class="trainer-feedback" id="trainer-feedback" role="status" aria-live="polite">Runs continuously until you press Stop.</p>
+        <p class="muted">Hold your cube with white on top and green facing you. Match the turns, even if your colors differ.</p>
+      </section>
+      <section id="learning-panel" class="hidden">
         <label class="eyebrow" for="method">WHAT WOULD YOU LIKE TO DO?</label>
         <select id="method"><option value="guided">Solve this cube</option><option value="beginner">Learn step by step</option><option value="quick">Solve with notation</option></select>
         <details id="lesson-picker"><summary>Choose a lesson<i data-lucide="chevron-down"></i></summary><div id="lesson-list" class="lesson-list"></div></details>
@@ -59,16 +93,23 @@
         <p class="solver-note muted">Uses an efficient solver. Beginner lessons use practice examples.</p>
       </section>
     </aside>
+      <div id="learn-flat" class="learn-flat hidden">
+        <details id="learn-flat-details"><summary>Use a flat view instead <i data-lucide="chevron-down"></i></summary>
+          <p class="muted">Choose a color to look from that side. Then tap a square. Each square belongs to a whole piece.</p>
+          <div id="learn-flat-faces" class="learn-flat-faces" role="group" aria-label="Choose a side to inspect"></div>
+          <div id="learn-flat-grid" class="learn-flat-grid" role="group" aria-label="Squares on the selected side"></div>
+        </details>
+      </div>
       <div class="manual-controls">
-        <div class="control-heading"><h2>Tap a side</h2><div class="turn-options"><button id="reverse" aria-pressed="false"><i data-lucide="rotate-ccw"></i>Backwards</button><button id="half-turns" aria-pressed="false">Twice</button></div></div>
+        <div class="control-heading"><h2>Tap a side</h2><div class="turn-options"><button id="reverse" aria-pressed="false"><i data-lucide="rotate-ccw"></i>Prime (′)</button><button id="half-turns" aria-pressed="false">Twice</button></div></div>
         <div class="face-buttons" id="face-buttons"></div>
         <div class="cube-actions"><button id="scramble"><i data-lucide="shuffle"></i>Mix</button><button id="undo"><i data-lucide="undo-2"></i>Undo</button><details class="more-controls"><summary>More<i data-lucide="chevron-down"></i></summary><div><button id="reset"><i data-lucide="rotate-ccw"></i>Reset cube</button><button id="labels-toggle" aria-pressed="false"><i data-lucide="tags"></i>Face labels</button><button id="fullscreen"><i data-lucide="maximize"></i>Full screen</button></div></details></div>
-        <p class="play-hint">Want to learn the moves? <button id="play-practice">Try Practice →</button></p>
+
       </div>
   </div>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<dialog id="scan-dialog"><div class="dialog-header"><div><div class="eyebrow">6 SIDES</div><h2>Scan your cube</h2></div><button class="icon-button" id="close-scan" aria-label="Close scanner"><i data-lucide="x"></i></button></div><p class="dialog-intro">Scan each side, then check its colors. Use a standard cube: white opposite yellow, green opposite blue, red opposite orange.</p><div class="scan-layout"><div><div class="camera-view"><video id="video" autoplay playsinline muted></video><div class="camera-placeholder" id="camera-placeholder"><i data-lucide="camera"></i><span>Show one side at a time.</span><button id="enable-camera" class="primary">Enable camera</button></div><div class="capture-grid" id="capture-grid" aria-hidden="true"></div></div><p class="scan-instruction" id="scan-instruction"></p><button class="primary capture-button" id="capture"><i data-lucide="camera"></i>Capture this side</button><p class="camera-message" id="camera-message" role="status">No camera? You can paint the squares on the right.</p></div><div><div class="scan-face-tabs" id="scan-face-tabs"></div><h3 id="scan-face-name">White · top side</h3><p class="muted">Choose a color, then tap a square to correct it.</p><div class="color-palette" id="color-palette"></div><div class="edit-face" id="edit-face"></div><p class="muted">The center square stays fixed. Keep the top of each face oriented as instructed.</p><div class="scan-face-actions"><button id="previous-face">← Previous</button><button id="next-face">Next side →</button></div></div></div><div class="dialog-footer"><span id="scan-validation">Check all 6 faces before continuing.</span><button class="primary" id="apply-scan">Use this cube<i data-lucide="arrow-right"></i></button></div></dialog>
-<dialog id="movement-dialog"><div class="dialog-header"><div><div class="eyebrow">THE BASICS</div><h2>Learn the 6 sides</h2></div><button class="icon-button" id="close-movement" aria-label="Close movement guide"><i data-lucide="x"></i></button></div><p class="dialog-intro">Keep white on top and green in front. Each letter names one face. Tap a move to see it, then try it yourself.</p><div id="movement-grid" class="movement-grid"></div><div class="notation-guide"><p><strong>R</strong> One clockwise quarter turn</p><p><strong>R′</strong> One counterclockwise quarter turn</p><p><strong>R2</strong> A half turn (two clicks)</p></div><p class="muted">Always imagine looking directly at the face you’re turning. The back and bottom can feel tricky — go slowly.</p><button class="primary" id="start-from-guide">Start practice<i data-lucide="arrow-right"></i></button></dialog><dialog id="help-dialog"><div class="dialog-header"><h2>How to play</h2><button class="icon-button" id="close-help" aria-label="Close help"><i data-lucide="x"></i></button></div><div class="help-content"><p><strong>Look around.</strong> Drag the cube with one finger or your mouse. Pinch or scroll to zoom.</p><p><strong>Give it a twist.</strong> Tap a face button below the cube. R means right, U means up, F means front. A prime (′) turns it backward; 2 means turn twice. Clockwise is always as you look straight at that face.</p><p><strong>Learn by doing.</strong> The beginner path has seven practice lessons. Each one starts with a small, prepared example so you can understand the idea.</p><p><strong>Solve your own scramble.</strong> Choose “Solve my cube” for a complete, efficient solution with spoken or written turn instructions. This uses a two-phase solver; it does not produce a layer-by-layer beginner solution.</p><p><strong>Keyboard magic.</strong> R, L, U, D, F, B turn a side; hold Shift to reverse. S mixes it up. Space plays or pauses.</p><p><strong>Bring your cube.</strong> Scan all six sides in good light. Always check the colors before starting. Images stay in your browser.</p><p class="muted">Rubik’s Cube is a trademark of its respective owner. Cubie is an independent learning tool.</p></div></dialog><script type="module" src="/src/main.js"></script>
+<dialog id="scan-dialog"><div class="dialog-header"><div><div class="eyebrow">6 SIDES</div><h2>Scan your cube</h2></div><button class="icon-button" id="close-scan" aria-label="Close scanner"><i data-lucide="x"></i></button></div><p class="dialog-intro">Scan each side, then check its colors. Use a standard cube: white opposite yellow, green opposite blue, red opposite orange.</p><div class="scan-layout"><div><div class="camera-view"><video id="video" autoplay playsinline muted></video><div class="camera-placeholder" id="camera-placeholder"><i data-lucide="camera"></i><span>Show one side at a time.</span><button id="enable-camera" class="primary">Enable camera</button></div><div class="capture-grid" id="capture-grid" aria-hidden="true"></div></div><p class="scan-instruction" id="scan-instruction"></p><button class="primary capture-button" id="capture"><i data-lucide="camera"></i>Capture this side</button><p class="camera-message" id="camera-message" role="status">No camera? You can paint the squares on the right.</p></div><div><div class="scan-face-tabs" id="scan-face-tabs"></div><h3 id="scan-face-name">White · up side</h3><p class="muted">Choose a color, then tap a square to correct it.</p><div class="color-palette" id="color-palette"></div><div class="edit-face" id="edit-face"></div><p class="muted">The center square stays fixed. Keep each face oriented as instructed.</p><div class="scan-face-actions"><button id="previous-face">← Previous</button><button id="next-face">Next side →</button></div></div></div><div class="dialog-footer"><span id="scan-validation">Check all 6 faces before continuing.</span><button class="primary" id="apply-scan">Use this cube<i data-lucide="arrow-right"></i></button></div></dialog>
+<dialog id="help-dialog"><div class="dialog-header"><h2>Meet your cube</h2><button class="icon-button" id="close-help" aria-label="Close help"><i data-lucide="x"></i></button></div><div class="help-content"><p><strong>Look around.</strong> In Learn, drag the cube to look around. In Solve, drag outside it to look around; swipe a face to turn a layer. In Practice, follow the animated moves on your own cube. Pinch or scroll to zoom.</p><p><strong>Give it a twist.</strong> Tap a face button below the cube. R means right, U means up, F means front. A prime (′) turns it backward; 2 means turn twice. Clockwise is always as you look straight at that face.</p><p><strong>Learn by doing.</strong> Choose any topic in Learn to explore pieces, the six sides, and turns. Each topic checks your understanding. Solve also has seven prepared beginner examples.</p><p><strong>Solve your own scramble.</strong> Open Solve and choose “Solve this cube” for a complete, efficient solution with spoken or written turn instructions. This uses a two-phase solver; it does not produce a layer-by-layer beginner solution.</p><p><strong>Keyboard magic.</strong> R, L, U, D, F, B turn a side; hold Shift to reverse. In Solve, S mixes it up and Space plays or pauses. In Practice, Space starts or stops the drill.</p><p><strong>Bring your cube.</strong> Scan all six sides in good light. Always check the colors before starting. Images stay in your browser.</p><p class="muted">Rubik’s Cube is a trademark of its respective owner. Cubie is an independent learning tool.</p></div></dialog><script type="module" src="/src/main.js"></script>
 </body>
 </html>

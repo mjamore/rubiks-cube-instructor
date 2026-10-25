@@ -1,5 +1,11 @@
 import {VOICE_CLIPS} from './voice-clips.js';
 
+// Phonetic spellings keep speech engines from announcing “capital” before a move.
+export function spokenText(text){
+ const letters={U:'you',R:'are',F:'eff',D:'dee',L:'ell',B:'bee'};
+ return /^[URFDLB](?: (?:prime|two))?$/.test(text)?letters[text[0]]+text.slice(1):text;
+}
+
 // Unrecorded text uses a named female English voice when the device provides one.
 export function chooseVoice(voices){
  const english=voices.filter(voice=>/^en(?:-|$)/i.test(voice.lang));
@@ -29,7 +35,7 @@ export function createNarrator(synthesis,Utterance,Audio){
     function fallback(){
      if(usedFallback||finish!==done||!enabled)return;usedFallback=true;
      if(!synthesis||!Utterance){done();return;}
-     speech=new Utterance(text);const voice=chooseVoice(synthesis.getVoices());
+     speech=new Utterance(spokenText(text));const voice=chooseVoice(synthesis.getVoices());
      if(voice){speech.voice=voice;speech.lang=voice.lang;}else speech.lang='en-US';
      speech.rate=.9;speech.pitch=1.06;speech.volume=1;
      speech.onend=speech.onerror=done;

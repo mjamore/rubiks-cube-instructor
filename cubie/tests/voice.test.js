@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {chooseVoice,createNarrator} from '../src/voice.js';
+import {chooseVoice,createNarrator,spokenText} from '../src/voice.js';
 test('narration prefers a known female English voice over the device’s male default',()=>{
  const voices=[{name:'Daniel',lang:'en-US',default:true},{name:'Karen',lang:'en-AU'},{name:'Samantha',lang:'en-US'}];
  assert.equal(chooseVoice(voices),voices[2]);
@@ -17,7 +17,7 @@ test('narrator uses the selected voice, resolves cancellation, and respects mute
  const spoken=narrator.say('Turn the right side backward.');
  assert.equal(utterance.voice,voice);assert.equal(utterance.rate,.9);assert.equal(utterance.lang,'en-US');
  narrator.cancel();await spoken;
- const second=narrator.say('Turn the top side.');utterance.onend();await second;
+ const second=narrator.say('Turn the up side.');utterance.onend();await second;
  narrator.setEnabled(false);utterance=null;await narrator.say('Muted');assert.equal(utterance,null);
  assert.ok(cancels>=3);
  await createNarrator(undefined,undefined).say('Unsupported');
@@ -29,13 +29,13 @@ test('core instructions play the bundled female recording, without requesting a 
  const first=narrator.say('Turn the right side backward');
  assert.match(audio.src,/^\/voice\/instruction-\d+\.m4a$/);
  audio.onended();await first;assert.equal(spoken,false);
- const second=narrator.say('Turn the top side clockwise');narrator.cancel();await second;assert.equal(audio.paused,true);
+ const second=narrator.say('Turn the up side clockwise');narrator.cancel();await second;assert.equal(audio.paused,true);
 });
 test('every core move and lesson has a nonempty bundled female voice recording',async()=>{
  const {VOICE_CLIPS}=await import('../src/voice-clips.js');
  const {FACES,LESSONS,explain}=await import('../src/cube-state.js');
  const {statSync}=await import('node:fs');
- for(const text of [...FACES.flatMap(face=>['',"'",'2'].map(suffix=>explain(face+suffix).title)),...LESSONS.map(lesson=>lesson.description)]){
+ for(const text of [...FACES.flatMap(face=>['',"'",'2'].map(suffix=>explain(face+suffix).title)),...LESSONS.map(lesson=>lesson.description),...FACES.flatMap(face=>['',' prime',' two'].map(suffix=>face+suffix))]){
   assert.ok(VOICE_CLIPS[text],text);
   assert.ok(statSync(new URL(`../public${VOICE_CLIPS[text]}`,import.meta.url)).size>1000,text);
  }
@@ -47,4 +47,14 @@ test('a late audio rejection cannot speak an old instruction after mute',async()
  const pending=narrator.say('Turn the right side backward');
  narrator.setEnabled(false);reject(new Error('Playback interrupted'));await pending;
  await Promise.resolve();assert.equal(spoken,false);
+});
+
+test('notation names say the letter without announcing capitalization, including fallback',async()=>{
+ const letters={U:'you',R:'are',F:'eff',D:'dee',L:'ell',B:'bee'};
+ for(const [letter,name] of Object.entries(letters))for(const suffix of ['',' prime',' two'])assert.equal(spokenText(letter+suffix),name+suffix);
+ assert.equal(spokenText('Turn the right side backward'),'Turn the right side backward');
+ let utterance;
+ class Utterance{constructor(text){this.text=text;}}
+ const narrator=createNarrator({cancel(){},getVoices:()=>[],speak:speech=>{utterance=speech;}},Utterance);
+ const pending=narrator.say('R prime');assert.equal(utterance.text,'are prime');utterance.onend();await pending;
 });
