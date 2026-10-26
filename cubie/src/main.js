@@ -183,13 +183,13 @@ $('trainer-replay').onclick=()=>{
 $('trainer-pace').onchange=$('trainer-animation-speed').onchange=()=>{if(trainer.active)trainer.deadline=performance.now()+practiceInterval();};
 // Learn uses its own prepared cube; leaving restores the user's solve/practice state.
 let savedLearnSpeed,savedLearnPositions=readLearnProgress();try{savedLearnSpeed=localStorage.getItem('cubie-learn-speed');savedLearnPositions=readLearnProgress(localStorage.getItem('cubie-learn-progress'));}catch{}
-const learning={topic:null,positions:savedLearnPositions,completed:[...savedLearnPositions],answered:false,partial:null,flatFace:'F',moves:[],demo:false,beat:0,clock:createLearnClock(),phase:'try',controller:null,run:null};
+const learning={topic:null,positions:savedLearnPositions,completed:[...savedLearnPositions],answered:false,partial:null,flatFace:'F',moves:[],demo:false,beat:0,position:0,autoplay:true,clock:createLearnClock(),phase:'try',controller:null,run:null};
 let learnVersion=0;
 const currentLearnTopic=()=>LEARN_TOPICS[learning.topic];
 const currentLearnStep=()=>currentLearnTopic()?.steps[learning.positions[learning.topic]];
 const topicDone=index=>learning.completed[index]===LEARN_TOPICS[index].steps.length;
 function learnFeedback(text,kind=''){
- $('learn-feedback').textContent=text;$('learn-feedback').className='learn-feedback '+kind;
+ $('learn-caption').textContent=text;$('learn-caption').className=kind;
 }
 function resetLearnCube(){
  cube=new Cube();history=[];learning.moves=[];learning.flatFace='F';view.clearTeaching();view.setState(cube.asString());
@@ -215,8 +215,8 @@ function renderLearn({focus=false}={}){
   document.querySelector('.learn-watch-row').after($('learn-visual'));
   $('learn-visual').after($('cube-canvas'));
   $('cube-canvas').after($('learn-step-progress'));
-  $('learn-beats').after(document.querySelector('.stage-bottom'));
-  $('learn-feedback').after($('learn-demo-controls'));
+  $('learn-step-progress').after($('learn-watch-controls'));
+  $('learn-watch-controls').after(document.querySelector('.stage-bottom'));
   $('learn-lesson').appendChild($('learn-explanation'));
   $('learn-lesson').appendChild($('learn-flat'));
  }
@@ -240,10 +240,12 @@ function renderLearn({focus=false}={}){
   $('learn-title').textContent=item.title;$('learn-copy').innerHTML=item.copy;$('learn-task').textContent=learnTask(item);
   $('learn-direction').classList.toggle('hidden',item.kind!=='turn');
   $('learn-hint-copy').textContent=item.hint;$('learn-hint-copy').classList.add('hidden');$('learn-hint').setAttribute('aria-expanded',false);
-  $('learn-next').disabled=true;$('learn-next').innerHTML=`${learning.positions[learning.topic]===topic.steps.length-1?'Finish topic':'Continue'}<i data-lucide="arrow-right"></i>`;
+  $('learn-next').hidden=!learning.answered;$('learn-next').disabled=false;$('learn-next').innerHTML='Next Lesson<i data-lucide="arrow-right"></i>';
   $('learn-check-view').classList.toggle('hidden',item.kind!=='view');
-  $('learn-demo-controls').appendChild($('learn-next'));
-  $('learn-beats').innerHTML=learnDemo(item).map((beat,i)=>`<button data-beat="${i}" aria-label="Watch step ${i+1}: ${beat.label}">${i+1}</button>`).join('');
+  const beats=learnDemo(item);
+  $('learn-beats').innerHTML=beats.map((beat,i)=>`<button data-beat="${i}" aria-label="Watch step ${i+1}: ${beat.label}">${i+1}</button>`).join('');
+  $('learn-step-progress').max=learnDemoDuration(beats[0]);
+  $('learn-step-progress').style.setProperty('--progress','0%');
   $('learn-beats').querySelectorAll('button').forEach(button=>button.onclick=()=>startLearnDemo(Number(button.dataset.beat),false));
   learnFeedback('');renderLearnFlat();
   if(focus)$('learn-title').focus({preventScroll:true});
@@ -268,15 +270,15 @@ function renderLearnSteps(){
 }
 function openLearnTopic(index){if(isBusy())return;learning.topic=index;learning.positions[index]=topicDone(index)?0:learning.completed[index];learning.answered=false;renderLearn({focus:true});}
 function finishLearnAnswer(){
- learning.answered=true;setLearnPhase('try');$('learn-caption').textContent='You got it!';$('learn-next').disabled=false;$('cube-status').textContent='You got it!';
- learning.completed[learning.topic]=Math.max(learning.completed[learning.topic],learning.positions[learning.topic]+1);saveLearnProgress();renderLearnSteps();learnFeedback(currentLearnStep().success,'correct');$('learn-next').focus({preventScroll:true});
+ learning.answered=true;setLearnPhase('try');$('learn-caption').textContent='You got it!';$('learn-next').hidden=false;$('cube-status').textContent='You got it!';
+ learning.completed[learning.topic]=Math.max(learning.completed[learning.topic],learning.positions[learning.topic]+1);saveLearnProgress();renderLearnSteps();$('learn-caption').className='correct';$('learn-next').focus({preventScroll:true});
 }
 function learnPick(pick){
  const item=currentLearnStep();if(mode!=='learn'||!item||learning.answered||isBusy()||learning.phase!=='try'||!['piece','face'].includes(item.kind))return;
  const correct=checkLearnPick(item,pick),selected=pieceKind(pick.position);view.markPiece(pick.position);
  if(correct)finishLearnAnswer();
  else if(item.face&&pick.face!==item.face)learnFeedback(`That’s the ${COLOR_NAMES[pick.face].toLowerCase()} face. ${learnTask(item)}`,'wrong');
- else learnFeedback(item.kind==='piece'?`That’s ${selected==='edge'?'an':'a'} ${selected}. Try ${item.answer==='edge'?'an':'a'} ${item.answer}. Use a hint if you need one.`:`That’s ${pick.face} · ${NAMES[pick.face]}. Try again. You can drag to look around.`,'wrong');
+ else learnFeedback(item.kind==='piece'?(item.answer==='center'&&selected==='corner'?'That’s a corner. Tap the center.':`That’s ${selected==='edge'?'an':'a'} ${selected}. Try ${item.answer==='edge'?'an':'a'} ${item.answer}. Use a hint if you need one.`):`That’s ${pick.face} · ${NAMES[pick.face]}. Try again. You can drag to look around.`,'wrong');
 }
 async function learnTurn(move){
  const item=currentLearnStep();if(!item||item.kind!=='turn'||learning.answered||learning.phase!=='try')return false;
@@ -293,7 +295,7 @@ $('learn-back').onclick=$('learn-all').onclick=()=>{if(isBusy())return;learning.
 $('learn-review').onclick=()=>{learning.positions[learning.topic]=0;learning.answered=false;renderLearn({focus:true});};
 $('learn-next').onclick=()=>{if(!learning.answered||isBusy())return;learning.positions[learning.topic]++;learning.answered=false;saveLearnProgress();renderLearn({focus:true});};
 $('learn-hint').onclick=()=>{const hidden=$('learn-hint-copy').classList.toggle('hidden');$('learn-hint').setAttribute('aria-expanded',!hidden);};
-$('learn-hear').onclick=()=>{if(currentLearnStep())narrator.say(`${$('learn-caption').textContent} ${$('learn-detail').textContent}`);};
+$('learn-hear').onclick=()=>{if(currentLearnStep())narrator.say($('learn-caption').textContent);};
 $('learn-check-view').onclick=()=>{const item=currentLearnStep();if(!item||learning.answered||learning.phase!=='try')return;if(view.isFacing(item.answer))finishLearnAnswer();else learnFeedback('Keep looking around until the blue face points toward you. Then check again.','wrong');};
 function setLearnPhase(phase){
  learning.phase=phase;
@@ -304,7 +306,7 @@ function setLearnPhase(phase){
  $('learn-step-progress').classList.toggle('hidden',phase!=='watch');
  $('learn-task').textContent=learnTask(currentLearnStep());
  $('learn-play').classList.toggle('hidden',phase!=='watch');
- $('learn-next').classList.toggle('hidden',phase==='watch');
+ $('learn-next').classList.toggle('hidden',phase==='watch'||!learning.answered);
  $('learn-check-view').disabled=phase!=='try';
  document.querySelector('.manual-controls').classList.toggle('hidden',phase!=='try'||currentLearnStep().kind!=='turn');
  document.querySelector('.manual-controls').querySelectorAll('button').forEach(button=>button.disabled=phase!=='try');
@@ -317,7 +319,7 @@ function saveLearnProgress(){
 }
 function renderLearnPlay(){
  const playing=learning.demo&&!learning.clock.paused;
- $('learn-play').innerHTML=`<i data-lucide="${playing?'pause':'play'}"></i>${playing?'Pause':'Play'}`;refreshIcons();
+ const label=playing?'Pause':'Play';$('learn-play').innerHTML=`<i data-lucide="${playing?'pause':'play'}"></i>`;$('learn-play').setAttribute('aria-label',label);$('learn-play').title=label;refreshIcons();
 }
 function pauseLearnDemo(){
  if(!learning.demo)return;
@@ -329,25 +331,30 @@ function stopLearnDemo(){
  renderLearnPlay();
 }
 function demoHold(ms,signal,clock){
+ if(ms<=0)return Promise.resolve();
  return new Promise(resolve=>{
   const start=clock.now();
   const frame=()=>{if(signal.aborted||clock.now()-start>=ms)resolve();else requestAnimationFrame(frame);};
   requestAnimationFrame(frame);
  });
 }
-function trackLearnStep(beat,signal,clock){
- const bar=$('learn-step-progress'),fill=bar.firstElementChild,start=clock.now(),duration=learnDemoDuration(beat);
- let active=true;
- const render=value=>{fill.style.transform=`scaleX(${value})`;bar.setAttribute('aria-valuenow',Math.round(value*100));};
- const frame=()=>{if(!active||signal.aborted)return;render(Math.min(.99,(clock.now()-start)/duration));requestAnimationFrame(frame);};
- render(0);requestAnimationFrame(frame);
- return complete=>{active=false;if(complete)render(1);};
+function renderLearnTimeline(position,duration){
+ learning.position=position;
+ const bar=$('learn-step-progress');bar.max=duration;bar.value=position;
+ bar.style.setProperty('--progress',`${position/duration*100}%`);
+ bar.setAttribute('aria-valuetext',`${(position/1000).toFixed(1)} of ${(duration/1000).toFixed(1)} seconds in step ${learning.beat+1}`);
+}
+function trackLearnStep(beat,signal,clock,offset=0){
+ const start=clock.now(),duration=learnDemoDuration(beat);let active=true;
+ const frame=()=>{if(!active||signal.aborted)return;renderLearnTimeline(Math.min(duration,clock.now()-start+offset),duration);requestAnimationFrame(frame);};
+ renderLearnTimeline(offset,duration);requestAnimationFrame(frame);
+ return complete=>{active=false;if(complete)renderLearnTimeline(duration,duration);};
 }
 async function rewindLearnMoves(signal){
  view.clearTeaching();
  if(learning.moves.length)$('learn-caption').textContent='Rewinding…';
  while(learning.moves.length&&!signal.aborted){
-  const move=inverse(learning.moves.pop());cube.move(move);await view.turn(move,cube.asString(),700,{clock:learning.clock});
+  const move=inverse(learning.moves.pop());cube.move(move);await view.turn(move,cube.asString(),700,{clock:learning.clock,signal});
  }
 }
 function startLearnTry(){
@@ -364,46 +371,53 @@ function startLearnTry(){
   const item=currentLearnStep();
   await view.focusTeaching({face:item.kind==='turn'?item.answer[0]:'F',...(item.kind==='turn'?{}:{look:[0,5.4,10.7]})},{signal:controller.signal,clock:learning.clock,duration:1400});
   if(controller.signal.aborted)return;
-  learning.demo=false;learning.controller=null;learning.partial=null;learning.answered=false;$('learn-next').disabled=true;setLearnPhase('try');
+  learning.demo=false;learning.controller=null;learning.partial=null;learning.answered=false;$('learn-next').hidden=true;setLearnPhase('try');
   renderLearnPlay();
-  $('learn-scene').textContent='';$('learn-caption').textContent=learnTask(item);$('learn-detail').textContent='';$('learn-colors').replaceChildren();
+  learnFeedback('');$('learn-caption').textContent=learnTask(item);$('learn-caption').className='';
   $('learn-beats').querySelectorAll('button').forEach(button=>button.removeAttribute('aria-current'));
-  learnFeedback('');renderLearnFlat();updateState();
+  renderLearnFlat();updateState();
  })();
 }
-function startLearnDemo(start=0,autoplay=true){
+function startLearnDemo(start=0,autoplay=true,offset=0,paused=false){
  if(mode!=='learn'||!currentLearnStep()||isBusy()&&!learning.demo)return;
  const previous=learning.run;stopLearnDemo();
  const controller=new AbortController(),{signal}=controller,version=learnVersion;
- learning.controller=controller;learning.demo=true;renderLearnPlay();
+ learning.controller=controller;learning.demo=true;learning.beat=start;learning.autoplay=autoplay;
+ if(paused)learning.clock.pause();
+ renderLearnTimeline(offset,learnDemoDuration(learnDemo(currentLearnStep())[start]));renderLearnPlay();
  learning.run=(async()=>{
   await previous;
   if(signal.aborted||version!==learnVersion)return;
   const item=currentLearnStep(),beats=learnDemo(item),clock=learning.clock;
-  await rewindLearnMoves(signal);if(signal.aborted||version!==learnVersion)return;
-  resetLearnCube();learning.partial=null;learning.answered=false;$('learn-next').disabled=true;setLearnPhase('watch');learnFeedback('');
+  resetLearnCube();view.resetCamera();learning.partial=null;learning.answered=false;$('learn-next').hidden=true;setLearnPhase('watch');learnFeedback('');
   renderLearnPlay();
-  for(const scene of beats.slice(0,start).flatMap(beat=>beat.scenes||[beat]))if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),700,{clock});if(signal.aborted)return;}
+  for(const scene of beats.slice(0,start).flatMap(beat=>beat.scenes||[beat])){
+   await view.focusTeaching(scene,{duration:0});
+   if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),0);}
+   if(signal.aborted)return;
+  }
   try{
    for(let i=start;i<beats.length;i++){
     if(signal.aborted||version!==learnVersion)return;
     const beat=beats[i];learning.beat=i;
-    $('learn-scene').textContent=`Step ${i+1} of ${beats.length}`;
     $('learn-caption').textContent=beat.caption;
-    $('learn-step-progress').setAttribute('aria-label',`Step ${i+1} of ${beats.length} progress`);
     $('learn-beats').querySelectorAll('button').forEach((button,index)=>{if(index===i)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');});
-    const finishProgress=trackLearnStep(beat,signal,clock);
+    const finishProgress=trackLearnStep(beat,signal,clock,i===start?offset:0);
+    let remaining=i===start?offset:0;
     try{
      for(const scene of beat.scenes||[beat]){
       if(signal.aborted||version!==learnVersion)return;
       const timing=learnSceneTiming(scene);view.teach(scene);
-      $('learn-detail').textContent=beat.scenes?(scene.focus==='face'?scene.caption:scene.detail):scene.detail||'';
-      $('learn-colors').innerHTML=(scene.colors||[]).map(face=>`<span><i style="background:${COLORS[face]}"></i>${COLOR_NAMES[face]}</span>`).join('');
-      await view.focusTeaching(scene,{signal,clock,duration:timing.camera});
+      $('learn-caption').className='';
+      await view.focusTeaching(scene,{signal,clock,duration:remaining>=timing.camera?0:timing.camera,offset:remaining});
+      remaining=Math.max(0,remaining-timing.camera);
       if(signal.aborted||version!==learnVersion)return;
-      if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),timing.turn,{clock});}
-      await demoHold(timing.hold,signal,clock);
+      if(scene.turn){cube.move(scene.turn);learning.moves.push(scene.turn);await view.turn(scene.turn,cube.asString(),remaining>=timing.turn?0:timing.turn,{clock,signal,offset:remaining});}
+      remaining=Math.max(0,remaining-timing.turn);
+      await demoHold(Math.max(0,timing.hold-remaining),signal,clock);
+      remaining=Math.max(0,remaining-timing.hold);
      }
+     while(clock.paused&&!signal.aborted)await new Promise(requestAnimationFrame);
     }finally{finishProgress(!signal.aborted);}
     if(!autoplay)return;
    }
@@ -426,6 +440,18 @@ $('learn-speed').onchange=()=>{
 $('learn-watch-status').onclick=()=>{if(learning.phase!=='watch')startLearnDemo();};
 $('learn-try-status').onclick=()=>{if(learning.phase!=='try')startLearnTry();};
 $('learn-play').onclick=()=>{if(!learning.demo)startLearnDemo(learning.beat);else if(learning.clock.paused){learning.clock.play();renderLearnPlay();}else pauseLearnDemo();};
+function seekLearnTimeline(position,paused=learning.clock.paused||!learning.demo){
+ const duration=learnDemoDuration(learnDemo(currentLearnStep())[learning.beat]);
+ const target=Math.max(0,Math.min(duration,position));
+ startLearnDemo(learning.beat,learning.autoplay,target,paused);
+}
+let scrubPlaying=false;
+$('learn-step-progress').onpointerdown=()=>{scrubPlaying=learning.demo&&!learning.clock.paused;pauseLearnDemo();};
+$('learn-step-progress').oninput=()=>seekLearnTimeline(Number($('learn-step-progress').value),true);
+$('learn-step-progress').onchange=$('learn-step-progress').onpointerup=$('learn-step-progress').onpointercancel=()=>{
+ if(scrubPlaying){learning.clock.play();renderLearnPlay();}
+ scrubPlaying=false;
+};
 $('learn-demo').onclick=()=>startLearnDemo();
 $('learn-practice').onclick=()=>changeMode('practice');
 // Six-face capture and manual correction. No frame or face data leaves this device.
@@ -438,7 +464,36 @@ $('enable-camera').onclick=async()=>{if(!navigator.mediaDevices?.getUserMedia){$
 $('capture').onclick=()=>{const video=$('video');if(!video.videoWidth){toast('Wait a moment for the camera, then try again.');return;}const size=Math.min(video.videoWidth,video.videoHeight),canvas=document.createElement('canvas');canvas.width=canvas.height=300;const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,(video.videoWidth-size)/2,(video.videoHeight-size)/2,size,size,0,0,300,300);const colors=[];for(let i=0;i<9;i++){const x=51+(i%3+.5)*66,y=51+(Math.floor(i/3)+.5)*66,data=ctx.getImageData(x-4,y-4,9,9).data;const rgb=[0,1,2].map(c=>{const values=[];for(let j=c;j<data.length;j+=4)values.push(data[j]);return values.sort((a,b)=>a-b)[40];});colors.push(rgb);}for(let i=0;i<9;i++)scanState[scanFace*9+i]=i===4?FACES[scanFace]:classifyColor(colors[i]);reviewed.add(scanFace);renderScan();$('camera-message').textContent='Captured! Check the colors, correct any mistakes, then turn to the next side.';};
 $('previous-face').onclick=()=>{reviewed.add(scanFace);scanFace=Math.max(0,scanFace-1);renderScan();};$('next-face').onclick=()=>{reviewed.add(scanFace);scanFace=Math.min(5,scanFace+1);renderScan();};
 $('apply-scan').onclick=()=>{reviewed.add(scanFace);if(reviewed.size!==6){$('scan-validation').textContent='Visit and check all six sides first.';return;}try{const scanned=validateState(scanState.join(''));invalidate();cube=scanned;history=[];view.setState(cube.asString());view.resetCamera();$('scan-dialog').close();changeMode('guided');updateState();if(!cube.isSolved())solve();else toast('Your cube is already solved. All six colors are home!');}catch(error){$('scan-validation').textContent=error.message;}};
-window.addEventListener('keydown',event=>{if(document.querySelector('dialog[open]')||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)||event.metaKey||event.ctrlKey||event.altKey||event.repeat)return;const key=event.key.toUpperCase();if(FACES.includes(key)){event.preventDefault();perform(key+(event.shiftKey?"'":''),{manual:true});}else if(key==='S'&&!['learn','practice'].includes(mode)){event.preventDefault();$('scramble').click();}else if(event.code==='Space'){if(mode==='learn'||document.activeElement?.tagName==='BUTTON')return;event.preventDefault();if(mode==='practice')$('trainer-start').click();else if(mode!=='learn')play();}});
+window.addEventListener('keydown',event=>{
+ const target=document.activeElement,timeline=target===$('learn-step-progress');
+ if(document.querySelector('dialog[open]')||target?.isContentEditable||(!timeline&&['INPUT','SELECT','TEXTAREA'].includes(target?.tagName))||event.metaKey||event.ctrlKey||event.altKey)return;
+ if(mode==='learn'&&currentLearnStep()&&learning.phase==='watch'){
+  if(event.code==='Space'){
+   if(target?.matches('button,a,summary')&&target!==$('learn-play'))return;
+   event.preventDefault();if(!event.repeat)$('learn-play').click();return;
+  }
+  if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
+   event.preventDefault();
+   if(event.shiftKey&&event.key.startsWith('Arrow')){
+    if(event.repeat)return;
+    const index=learning.beat+(event.key==='ArrowRight'?1:-1),beats=learnDemo(currentLearnStep());
+    if(index>=0&&index<beats.length)startLearnDemo(index,false);
+   }else{
+    const duration=learnDemoDuration(learnDemo(currentLearnStep())[learning.beat]);
+    seekLearnTimeline(event.key==='Home'?0:event.key==='End'?duration:learning.position+(event.key==='ArrowRight'?5000:-5000));
+   }
+   return;
+  }
+ }
+ if(event.repeat)return;
+ const key=event.key.toUpperCase();
+ if(FACES.includes(key)){event.preventDefault();perform(key+(event.shiftKey?"'":''),{manual:true});}
+ else if(key==='S'&&!['learn','practice'].includes(mode)){event.preventDefault();$('scramble').click();}
+ else if(event.code==='Space'){
+  if(mode==='learn'||target?.tagName==='BUTTON')return;
+  event.preventDefault();if(mode==='practice')$('trainer-start').click();else play();
+ }
+});
 window.addEventListener('pagehide',()=>{stopTrainer();stopLearnDemo();stopCamera();worker.terminate();view?.dispose();});document.addEventListener('visibilitychange',()=>{if(document.hidden){pause();if(mode==='learn')pauseLearnDemo();if(trainer.active){stopTrainer();trainerFeedback('Practice paused. Come back when you’re ready.');}if(stream)stopCamera();}});
 $('cube-canvas').addEventListener('pointerdown',()=>{if(mode==='learn'&&learning.demo)stopLearnDemo();},{capture:true});
 view?.enableFaceTurns(move=>{if(!document.querySelector('dialog[open]'))perform(move,{manual:true});},{canTurn:()=>mode!=='practice'&&(mode!=='learn'||learning.phase==='try'&&currentLearnStep()?.kind==='turn'),onPick:pick=>{if(!document.querySelector('dialog[open]'))learnPick(pick);}});

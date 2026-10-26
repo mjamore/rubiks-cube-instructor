@@ -83,20 +83,24 @@ export class CubeView{
   this.callout.style.left=`${THREE.MathUtils.clamp((anchor.x*.5+.5)*this.container.clientWidth,85,this.container.clientWidth-85)}px`;
   this.callout.style.top=`${THREE.MathUtils.clamp((-anchor.y*.5+.5)*this.container.clientHeight,beat.focus==='face'?35:65,this.container.clientHeight-30)}px`;
  }
- async focusTeaching(beat,{signal,clock,duration=1000}={}){
+ async focusTeaching(beat,{signal,clock,duration=1000,offset=0}={}){
   const [axis,sign]=TURN[beat.face],end=new THREE.Vector3(...(beat.look||[0,0,0]));if(!beat.look)end[axis]=sign*11;end.multiplyScalar(.8);
   const up=new THREE.Vector3(0,1,0);if(!beat.look&&axis==='y')up.set(0,0,-sign);
   const target=this.controls.target.clone(),distance=this.camera.position.distanceTo(target),startRotation=this.camera.quaternion.clone();
   const endRotation=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(end,new THREE.Vector3(),up));
+  const render=t=>{
+   const eased=THREE.MathUtils.smoothstep(t,0,1);
+   this.camera.quaternion.slerpQuaternions(startRotation,endRotation,eased);
+   this.controls.target.copy(target).multiplyScalar(1-eased);
+   this.camera.position.set(0,0,1).applyQuaternion(this.camera.quaternion).multiplyScalar(THREE.MathUtils.lerp(distance,end.length(),eased)).add(this.controls.target);
+   this.camera.up.set(0,1,0).applyQuaternion(this.camera.quaternion);
+  };
+  if(!duration){render(1);return;}
   const version=this.focusVersion=(this.focusVersion||0)+1;this.controls.enabled=false;this.focusing=true;
   try{await new Promise(resolve=>{
    let began;
    const frame=now=>{
-    if(signal?.aborted||version!==this.focusVersion){resolve();return;}const time=clock?clock.now():now;began??=time;const t=duration?Math.min((time-began)/duration,1):1,eased=THREE.MathUtils.smoothstep(t,0,1);
-    this.camera.quaternion.slerpQuaternions(startRotation,endRotation,eased);
-    this.controls.target.copy(target).multiplyScalar(1-eased);
-    this.camera.position.set(0,0,1).applyQuaternion(this.camera.quaternion).multiplyScalar(THREE.MathUtils.lerp(distance,end.length(),eased)).add(this.controls.target);
-    this.camera.up.set(0,1,0).applyQuaternion(this.camera.quaternion);
+    if(signal?.aborted||version!==this.focusVersion){resolve();return;}const time=clock?clock.now():now;began??=time;const t=Math.min((time-began+offset)/duration,1);render(t);
     if(t<1)requestAnimationFrame(frame);else resolve();
    };requestAnimationFrame(frame);
   });}finally{if(version===this.focusVersion){this.focusing=false;this.controls.enabled=true;}}
@@ -159,16 +163,17 @@ export class CubeView{
   });
   this.root.remove(pivot);
  }
- async turn(move,nextState,duration=550,{clock}={}){
+ async turn(move,nextState,duration=550,{clock,signal,offset=0}={}){
   if(this.busy)return false;
   this.busy=true;
   const turn=this.prepareTurn(move),time=duration;
   try{
+   if(!duration){turn.pivot.rotation[turn.axis]=turn.angle;this.finishTurn(turn);return true;}
    await new Promise(resolve=>{
     let start;
     const frame=now=>{
      const current=clock?clock.now():now;start??=current;
-     const progress=time===0?1:Math.min((current-start)/time,1);
+     const progress=signal?.aborted?1:Math.min((current-start+offset)/time,1);
      const eased=THREE.MathUtils.smoothstep(progress,0,1);
      turn.pivot.rotation[turn.axis]=turn.angle*eased;
      if(progress<1)requestAnimationFrame(frame);else resolve();

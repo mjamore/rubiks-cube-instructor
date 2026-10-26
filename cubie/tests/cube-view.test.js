@@ -239,7 +239,7 @@ test('camera tours keep a safe orbit, show every face including down, and honor 
   const controller=new AbortController(),tour=view.focusTeaching({face:'F'},{signal:controller.signal});
   frames.shift()(0);const before=view.camera.position.clone();controller.abort();frames.shift()(500);await tour;
   assert.ok(view.camera.position.distanceTo(before)<.00001);assert.equal(view.controls.enabled,true);
-  const instant=view.focusTeaching({face:'U'},{duration:0});frames.shift()(0);await instant;assert.equal(view.isFacing('U'),true);
+  await view.focusTeaching({face:'U'},{duration:0});assert.equal(frames.length,0);assert.equal(view.isFacing('U'),true);
  }finally{globalThis.requestAnimationFrame=previous;}
 });
 test('a teaching turn finishes smoothly before reset without stranding a layer pivot',async()=>{
@@ -292,5 +292,31 @@ test('Play resumes both camera and layer motion from the exact paused position',
   time=7000;frames.shift()(7000);assert.equal(pivot.rotation.x,angle);assert.equal(view.busy,true);
   clock.play();frames.shift()(7000);assert.equal(pivot.rotation.x,angle);time=7600;frames.shift()(7600);await turn;
   assert.equal(stickerState(view),cube.clone().move('R').asString());
+ }finally{globalThis.requestAnimationFrame=previous;}
+});
+
+test('timeline seeks display partial camera and layer motion while paused, then resume or cancel',async()=>{
+ const {createLearnClock}=await import('../src/learn.js');
+ const view=scene(new Cube().asString());view.camera=new THREE.PerspectiveCamera();view.camera.position.set(0,5.4,10.7);
+ view.controls={enabled:true,target:new THREE.Vector3()};view.camera.lookAt(view.controls.target);
+ let time=0;const clock=createLearnClock(()=>time),frames=[],previous=globalThis.requestAnimationFrame;
+ globalThis.requestAnimationFrame=callback=>frames.push(callback);
+ try{
+  clock.pause();
+  const before=view.camera.quaternion.clone(),camera=view.focusTeaching({face:'B'},{duration:1000,offset:500,clock});
+  frames.shift()(0);const midway=view.camera.quaternion.clone();
+  assert.ok(before.angleTo(midway)>.1,'seek displays the middle of the camera transition');
+  time=2000;frames.shift()(2000);assert.ok(view.camera.quaternion.equals(midway),'paused seek stays still');
+  clock.play();time=2500;frames.shift()(2500);await camera;assert.equal(view.isFacing('B'),true);
+  clock.pause();const controller=new AbortController(),cube=new Cube(),expected=cube.clone().move('R').asString();
+  const turn=view.turn('R',expected,2000,{clock,offset:1000,signal:controller.signal});
+  frames.shift()(2500);
+  const pivot=view.cubies.find(c=>c.parent!==view.root).parent;
+  assert.ok(Math.abs(pivot.rotation.x+Math.PI/4)<.00001,'seek renders exactly half of the turn');
+  time=6000;frames.shift()(6000);assert.ok(Math.abs(pivot.rotation.x+Math.PI/4)<.00001);
+  controller.abort();frames.shift()(6000);await turn;
+  assert.equal(view.busy,false);assert.equal(stickerState(view),expected);
+  await view.turn("R'",cube.asString(),0);assert.equal(frames.length,0,'reconstructing skipped turns needs no animation frame');
+  assert.equal(stickerState(view),cube.asString());assert.ok(view.cubies.every(c=>c.parent===view.root));
  }finally{globalThis.requestAnimationFrame=previous;}
 });

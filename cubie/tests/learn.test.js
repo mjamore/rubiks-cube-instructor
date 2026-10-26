@@ -33,7 +33,7 @@ test('each independently selectable topic has actionable checks, hints and a tak
  for(const topic of LEARN_TOPICS){
   assert.ok(topic.steps.length&&topic.takeaway);
   for(const step of topic.steps){
-   for(const key of ['kind','answer','title','copy','task','hint','success'])assert.ok(step[key],`${topic.id}: ${key}`);
+   for(const key of ['kind','answer','title','copy','task','hint'])assert.ok(step[key],`${topic.id}: ${key}`);
    if(step.kind==='turn'){
     assert.equal(checkPracticeTurn(step.answer,step.answer).result,'correct');
     assert.equal(checkPracticeTurn(step.answer,'B2').result,'wrong');
